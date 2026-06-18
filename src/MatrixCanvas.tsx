@@ -417,38 +417,32 @@ function drawHudPanel(ctx: CanvasRenderingContext2D, x: number, y: number, w: nu
 
 function drawAreaBadge(ctx: CanvasRenderingContext2D, view: View, m: Matrix2) {
   const det = determinant(m);
-  if (view.width < 560) {
-    drawHudPanel(ctx, 16, 86, 190, 64);
-    drawText(ctx, `det(A) = ${formatNumber(det, 4)}`, 111, 109, {
-      color: det < 0 ? MAGENTA : AMBER,
-      size: 15,
-      weight: 760,
-      align: "center",
-      font: "Georgia, serif",
-    });
-    drawText(ctx, `Area = ${formatNumber(Math.abs(det), 4)}`, 111, 134, {
-      color: "#f5fbff",
-      size: 12,
-      align: "center",
-    });
-    return;
-  }
-  const p = worldToScreen(view, [1.7, 1.25]);
-  const panelX = Math.min(Math.max(12, p[0] - 110), view.width - 232);
-  const textX = panelX + 110;
-  drawHudPanel(ctx, panelX, p[1] - 34, 220, 74);
-  drawText(ctx, `det(A) = ${formatNumber(det, 4)}`, textX, p[1] - 10, {
+  const narrow = view.width < 560;
+  const panelW = narrow ? Math.min(198, view.width - 32) : 240;
+  const panelH = narrow ? 66 : 76;
+  const panelX = 18;
+  const panelY = narrow ? 18 : 26;
+  const textX = panelX + panelW / 2;
+
+  drawHudPanel(ctx, panelX, panelY, panelW, panelH);
+  drawText(ctx, `det(A) = ${formatNumber(det, 4)}`, textX, panelY + (narrow ? 23 : 27), {
     color: det < 0 ? MAGENTA : AMBER,
-    size: 18,
+    size: narrow ? 15 : 18,
     weight: 760,
     align: "center",
     font: "Georgia, serif",
   });
-  drawText(ctx, `Area = |det(A)| = ${formatNumber(Math.abs(det), 4)}`, textX, p[1] + 20, {
-    color: "#f5fbff",
-    size: 13,
-    align: "center",
-  });
+  drawText(
+    ctx,
+    narrow ? `Area = ${formatNumber(Math.abs(det), 4)}` : `Area = |det(A)| = ${formatNumber(Math.abs(det), 4)}`,
+    textX,
+    panelY + (narrow ? 48 : 56),
+    {
+      color: "#f5fbff",
+      size: narrow ? 12 : 13,
+      align: "center",
+    },
+  );
 }
 
 function drawSignIndicator(ctx: CanvasRenderingContext2D, view: View, m: Matrix2, time: number) {
