@@ -39,6 +39,15 @@ type View = {
 
 type DragTarget = "first" | "second" | null;
 
+type TextOptions = {
+  size?: number;
+  color?: string;
+  weight?: number | string;
+  align?: CanvasTextAlign;
+  font?: string;
+  alpha?: number;
+};
+
 const CYAN = "#39dff7";
 const AMBER = "#ffd44d";
 const MAGENTA = "#ff4f98";
@@ -104,14 +113,7 @@ function drawText(
   text: string,
   x: number,
   y: number,
-  options: {
-    size?: number;
-    color?: string;
-    weight?: number | string;
-    align?: CanvasTextAlign;
-    font?: string;
-    alpha?: number;
-  } = {},
+  options: TextOptions = {},
 ) {
   const size = options.size ?? 14;
   const color = options.color ?? "#f5fbff";
@@ -123,6 +125,19 @@ function drawText(
   ctx.textBaseline = "middle";
   ctx.fillText(text, x, y);
   ctx.restore();
+}
+
+function drawTextLines(
+  ctx: CanvasRenderingContext2D,
+  lines: string[],
+  x: number,
+  y: number,
+  options: TextOptions & { lineHeight?: number } = {},
+) {
+  const lineHeight = options.lineHeight ?? (options.size ?? 14) * 1.35;
+  lines.forEach((line, index) => {
+    drawText(ctx, line, x, y + index * lineHeight, options);
+  });
 }
 
 function drawGrid(ctx: CanvasRenderingContext2D, view: View, limit = 4, showGrid = true) {
@@ -441,10 +456,12 @@ function drawSignIndicator(ctx: CanvasRenderingContext2D, view: View, m: Matrix2
   const label = det >= 0 ? "Orientation preserved" : "Orientation flipped";
   const color = det >= 0 ? GREEN : MAGENTA;
   const pulse = 0.65 + 0.35 * Math.sin(time * 0.006);
-  const x = view.width - 250;
-  const y = 66;
-  drawHudPanel(ctx, x, y, 214, 78);
-  drawText(ctx, det >= 0 ? "det(A) > 0" : "det(A) < 0", x + 107, y + 25, {
+  const narrow = view.width < 560;
+  const w = Math.min(214, view.width - 32);
+  const x = narrow ? 16 : view.width - 250;
+  const y = narrow ? 158 : 66;
+  drawHudPanel(ctx, x, y, w, 78);
+  drawText(ctx, det >= 0 ? "det(A) > 0" : "det(A) < 0", x + w / 2, y + 25, {
     color,
     size: 18,
     weight: 800,
@@ -452,7 +469,7 @@ function drawSignIndicator(ctx: CanvasRenderingContext2D, view: View, m: Matrix2
     font: "Georgia, serif",
     alpha: pulse,
   });
-  drawText(ctx, label, x + 107, y + 53, { color: "#eaf6ff", size: 13, weight: 640, align: "center" });
+  drawText(ctx, label, x + w / 2, y + 53, { color: "#eaf6ff", size: 13, weight: 640, align: "center" });
 }
 
 function drawSingularity(ctx: CanvasRenderingContext2D, view: View, m: Matrix2, time: number, options: MatrixCanvasProps) {
@@ -487,34 +504,37 @@ function drawSingularity(ctx: CanvasRenderingContext2D, view: View, m: Matrix2, 
   drawVector(ctx, view, secondColumn(m), AMBER, "v₂", 3.4, true);
 
   const pulse = 0.72 + 0.28 * Math.sin(time * 0.005);
-  drawText(ctx, "INFORMATION IS BEING DESTROYED.", view.width / 2, 82, {
+  const warningLines = view.width < 560 ? ["INFORMATION IS", "BEING DESTROYED."] : ["INFORMATION IS BEING DESTROYED."];
+  drawTextLines(ctx, warningLines, view.width / 2, view.width < 560 ? 64 : 82, {
     color: MAGENTA,
-    size: view.width < 640 ? 18 : 26,
+    size: view.width < 560 ? 17 : view.width < 640 ? 18 : 26,
     weight: 800,
     align: "center",
     font: "ui-monospace, SFMono-Regular, Menlo, monospace",
     alpha: pulse,
+    lineHeight: 24,
   });
-  drawText(ctx, "Many inputs  →  the same output", view.width / 2, 116, {
+  drawText(ctx, "Many inputs  ->  the same output", view.width / 2, view.width < 560 ? 120 : 116, {
     color: "rgba(255, 179, 211, 0.9)",
-    size: 15,
+    size: view.width < 560 ? 12 : 15,
     weight: 650,
     align: "center",
     font: "ui-monospace, SFMono-Regular, Menlo, monospace",
   });
-  const badgeX = view.width - 310;
-  const badgeY = view.height - 130;
-  drawHudPanel(ctx, badgeX, badgeY, 260, 88);
-  drawText(ctx, `det(A) ≈ ${formatNumber(determinant(m), 5)}`, badgeX + 130, badgeY + 28, {
+  const badgeW = Math.min(260, view.width - 32);
+  const badgeX = view.width < 560 ? 16 : view.width - badgeW - 16;
+  const badgeY = view.height - (view.width < 560 ? 116 : 130);
+  drawHudPanel(ctx, badgeX, badgeY, badgeW, 88);
+  drawText(ctx, `det(A) ≈ ${formatNumber(determinant(m), 5)}`, badgeX + badgeW / 2, badgeY + 28, {
     color: MAGENTA,
-    size: 18,
+    size: view.width < 560 ? 16 : 18,
     weight: 760,
     align: "center",
     font: "Georgia, serif",
   });
-  drawText(ctx, "Near zero: a dimension is collapsing", badgeX + 130, badgeY + 60, {
+  drawText(ctx, "Near zero: a dimension is collapsing", badgeX + badgeW / 2, badgeY + 60, {
     color: "rgba(255, 201, 225, 0.92)",
-    size: 12,
+    size: view.width < 560 ? 11 : 12,
     align: "center",
   });
 }
@@ -594,6 +614,11 @@ function linePoints(a: number, b: number, c: number, limit = 4): [Vec2, Vec2] | 
   ];
 }
 
+function formatEquationText(a: number, b: number, c: number): string {
+  const sign = b >= 0 ? "+" : "-";
+  return `${formatNumber(a, 2)}x ${sign} ${formatNumber(Math.abs(b), 2)}y = ${formatNumber(c, 2)}`;
+}
+
 function drawEquationLine(
   ctx: CanvasRenderingContext2D,
   view: View,
@@ -634,16 +659,17 @@ function drawLinearSystems(ctx: CanvasRenderingContext2D, view: View, m: Matrix2
     Math.abs(b * f - d * e) < 1e-5;
   const panelX = 32;
   const panelY = 34;
-  drawHudPanel(ctx, panelX, panelY, 334, 126);
-  drawText(ctx, `${formatNumber(a, 2)}x + ${formatNumber(b, 2)}y = ${formatNumber(e, 2)}`, panelX + 22, panelY + 34, {
+  const panelW = Math.min(334, view.width - 64);
+  drawHudPanel(ctx, panelX, panelY, panelW, 126);
+  drawText(ctx, formatEquationText(a, b, e), panelX + 22, panelY + 34, {
     color: CYAN,
-    size: 16,
+    size: view.width < 560 ? 14 : 16,
     weight: 720,
     font: "Georgia, serif",
   });
-  drawText(ctx, `${formatNumber(c, 2)}x + ${formatNumber(d, 2)}y = ${formatNumber(f, 2)}`, panelX + 22, panelY + 66, {
+  drawText(ctx, formatEquationText(c, d, f), panelX + 22, panelY + 66, {
     color: AMBER,
-    size: 16,
+    size: view.width < 560 ? 14 : 16,
     weight: 720,
     font: "Georgia, serif",
   });
@@ -716,47 +742,113 @@ function drawMiniTransformPanel(
 function drawMultiplication(ctx: CanvasRenderingContext2D, view: View, a: Matrix2, b: Matrix2, time: number) {
   drawGrid(ctx, view, 4, true);
   const product = multiplyMatrix(a, b);
-  const gap = 18;
-  const panelW = Math.max(210, (view.width - 90 - gap * 2) / 3);
-  const panelH = Math.min(310, view.height - 190);
-  const startX = 34;
-  const y = 118;
+  const phone = view.width < 560;
+  const pulse = 0.72 + 0.28 * Math.sin(time * 0.004);
+
+  if (phone) {
+    const panelW = view.width - 32;
+    const panelH = 104;
+    const startX = 16;
+    const startY = 20;
+    const gap = 8;
+    const rects = [
+      { x: startX, y: startY, w: panelW, h: panelH },
+      { x: startX, y: startY + panelH + gap, w: panelW, h: panelH },
+      { x: startX, y: startY + (panelH + gap) * 2, w: panelW, h: panelH },
+    ];
+    drawMiniTransformPanel(ctx, rects[0], "1. Start", [1, 0, 0, 1], CYAN);
+    drawMiniTransformPanel(ctx, rects[1], "2. B acts first", b, AMBER);
+    drawMiniTransformPanel(ctx, rects[2], "3. A after B = AB", product, MAGENTA);
+
+    const badgeW = view.width - 32;
+    const badgeX = 16;
+    const badgeY = startY + (panelH + gap) * 3 + 8;
+    drawHudPanel(ctx, badgeX, badgeY, badgeW, 72);
+    drawTextLines(
+      ctx,
+      [
+        `det(AB) = ${formatNumber(determinant(product), 4)}`,
+        `det(A) x det(B) = ${formatNumber(determinant(a), 3)} x ${formatNumber(determinant(b), 3)}`,
+      ],
+      badgeX + badgeW / 2,
+      badgeY + 24,
+      {
+        color: AMBER,
+        size: 12,
+        weight: 760,
+        align: "center",
+        font: "Georgia, serif",
+        alpha: pulse,
+        lineHeight: 24,
+      },
+    );
+    return;
+  }
+
+  const narrow = view.width < 720;
+  const gap = narrow ? 8 : 18;
+  const margin = narrow ? 14 : 34;
+  const panelW = narrow ? (view.width - margin * 2 - gap * 2) / 3 : (view.width - 90 - gap * 2) / 3;
+  const panelH = narrow ? Math.min(230, Math.max(170, view.height - 250)) : Math.min(310, view.height - 190);
+  const startX = margin;
+  const y = narrow ? 108 : 118;
   const rects = [
     { x: startX, y, w: panelW, h: panelH },
     { x: startX + panelW + gap, y, w: panelW, h: panelH },
     { x: startX + 2 * (panelW + gap), y, w: panelW, h: panelH },
   ];
-  drawText(ctx, "Unit square  →  transformed by B  →  then transformed by A", view.width / 2, 72, {
+  drawText(ctx, narrow ? "B acts first. A acts second. Area scales twice." : "Unit square  ->  transformed by B  ->  then transformed by A", view.width / 2, 72, {
     color: "#f5fbff",
-    size: view.width < 740 ? 14 : 20,
+    size: narrow ? 13 : 20,
     weight: 760,
     align: "center",
   });
-  drawMiniTransformPanel(ctx, rects[0], "Start", [1, 0, 0, 1], CYAN);
-  drawMiniTransformPanel(ctx, rects[1], "B acts first", b, AMBER);
-  drawMiniTransformPanel(ctx, rects[2], "A(Bx) = ABx", product, MAGENTA);
+  drawMiniTransformPanel(ctx, rects[0], narrow ? "Start" : "Start", [1, 0, 0, 1], CYAN);
+  drawMiniTransformPanel(ctx, rects[1], narrow ? "B" : "B acts first", b, AMBER);
+  drawMiniTransformPanel(ctx, rects[2], narrow ? "AB" : "A(Bx) = ABx", product, MAGENTA);
 
-  const pulse = 0.72 + 0.28 * Math.sin(time * 0.004);
-  const badgeX = view.width / 2 - 238;
-  const badgeY = view.height - 76;
-  drawHudPanel(ctx, badgeX, badgeY, 476, 50);
-  drawText(
-    ctx,
-    `det(AB) = ${formatNumber(determinant(product), 4)} = det(A) × det(B) = ${formatNumber(
-      determinant(a),
-      3,
-    )} × ${formatNumber(determinant(b), 3)}`,
-    badgeX + 238,
-    badgeY + 25,
-    {
-      color: AMBER,
-      size: view.width < 720 ? 12 : 15,
-      weight: 760,
-      align: "center",
-      font: "Georgia, serif",
-      alpha: pulse,
-    },
-  );
+  const badgeW = Math.min(narrow ? view.width - 28 : 476, view.width - 44);
+  const badgeX = view.width / 2 - badgeW / 2;
+  const badgeY = view.height - (narrow ? 100 : 76);
+  drawHudPanel(ctx, badgeX, badgeY, badgeW, narrow ? 72 : 50);
+  if (narrow) {
+    drawTextLines(
+      ctx,
+      [
+        `det(AB) = ${formatNumber(determinant(product), 4)}`,
+        `det(A) x det(B) = ${formatNumber(determinant(a), 3)} x ${formatNumber(determinant(b), 3)}`,
+      ],
+      badgeX + badgeW / 2,
+      badgeY + 24,
+      {
+        color: AMBER,
+        size: 12,
+        weight: 760,
+        align: "center",
+        font: "Georgia, serif",
+        alpha: pulse,
+        lineHeight: 24,
+      },
+    );
+  } else {
+    drawText(
+      ctx,
+      `det(AB) = ${formatNumber(determinant(product), 4)} = det(A) x det(B) = ${formatNumber(
+        determinant(a),
+        3,
+      )} x ${formatNumber(determinant(b), 3)}`,
+      badgeX + badgeW / 2,
+      badgeY + 25,
+      {
+        color: AMBER,
+        size: 15,
+        weight: 760,
+        align: "center",
+        font: "Georgia, serif",
+        alpha: pulse,
+      },
+    );
+  }
 }
 
 function drawSummary(ctx: CanvasRenderingContext2D, view: View, m: Matrix2, options: MatrixCanvasProps) {
@@ -770,25 +862,39 @@ function drawSummary(ctx: CanvasRenderingContext2D, view: View, m: Matrix2, opti
     basisLabels: true,
   });
   const det = determinant(m);
-  const bottomY = view.height - 120;
-  drawHudPanel(ctx, 34, bottomY, Math.min(650, view.width - 68), 84);
-  drawText(ctx, "A determinant is not merely a number.", 58, bottomY + 27, {
+  const narrow = view.width < 620;
+  const panelX = narrow ? 16 : 34;
+  const panelW = Math.min(650, view.width - panelX * 2);
+  const panelH = narrow ? 126 : 84;
+  const bottomY = view.height - (narrow ? 150 : 120);
+  drawHudPanel(ctx, panelX, bottomY, panelW, panelH);
+  drawText(ctx, "A determinant is not merely a number.", panelX + 24, bottomY + 27, {
     color: "#f5fbff",
-    size: 19,
+    size: narrow ? 15 : 19,
     weight: 790,
   });
-  drawText(ctx, "It measures how much area survives a transformation.", 58, bottomY + 56, {
-    color: AMBER,
-    size: 18,
-    weight: 780,
-    font: "Georgia, serif",
-  });
+  if (narrow) {
+    drawTextLines(ctx, ["It measures how much area survives", "a transformation."], panelX + 24, bottomY + 56, {
+      color: AMBER,
+      size: 14,
+      weight: 780,
+      font: "Georgia, serif",
+      lineHeight: 24,
+    });
+  } else {
+    drawText(ctx, "It measures how much area survives a transformation.", panelX + 24, bottomY + 56, {
+      color: AMBER,
+      size: 18,
+      weight: 780,
+      font: "Georgia, serif",
+    });
+  }
   if (Math.abs(det) < 0.08) {
-    drawText(ctx, "The transformation destroys a dimension.", view.width - 44, bottomY + 42, {
+    drawText(ctx, "The transformation destroys a dimension.", narrow ? panelX + 24 : view.width - 44, bottomY + (narrow ? 110 : 42), {
       color: MAGENTA,
-      size: 17,
+      size: narrow ? 13 : 17,
       weight: 800,
-      align: "right",
+      align: narrow ? "left" : "right",
     });
   }
 }
@@ -872,16 +978,18 @@ function drawScene(ctx: CanvasRenderingContext2D, view: View, props: MatrixCanva
     drawSignIndicator(ctx, view, m, time);
   }
   if (props.sceneId === "basis") {
-    drawHudPanel(ctx, 34, 34, 360, 112);
-    drawText(ctx, `Ae₁ = first column = (${formatNumber(m[0], 2)}, ${formatNumber(m[2], 2)})`, 58, 70, {
+    const panelW = Math.min(360, view.width - 32);
+    const panelX = 16;
+    drawHudPanel(ctx, panelX, 34, panelW, 112);
+    drawText(ctx, `Ae₁ = first column = (${formatNumber(m[0], 2)}, ${formatNumber(m[2], 2)})`, panelX + 24, 70, {
       color: CYAN,
-      size: 15,
+      size: view.width < 560 ? 12 : 15,
       weight: 720,
       font: "Georgia, serif",
     });
-    drawText(ctx, `Ae₂ = second column = (${formatNumber(m[1], 2)}, ${formatNumber(m[3], 2)})`, 58, 106, {
+    drawText(ctx, `Ae₂ = second column = (${formatNumber(m[1], 2)}, ${formatNumber(m[3], 2)})`, panelX + 24, 106, {
       color: AMBER,
-      size: 15,
+      size: view.width < 560 ? 12 : 15,
       weight: 720,
       font: "Georgia, serif",
     });

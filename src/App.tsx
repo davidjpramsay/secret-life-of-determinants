@@ -1,11 +1,14 @@
 import {
   Activity,
   AlertTriangle,
+  BookOpen,
   Columns3,
   Combine,
+  Eye,
   Gauge,
   Grid3X3,
   Layers3,
+  MousePointer2,
   MoveDiagonal2,
   Pause,
   Play,
@@ -31,7 +34,15 @@ import {
   singularValues,
   type Matrix2,
 } from "./math";
-import { compressionPresets, matrixPresets, scenes, systemCases, type Scene, type SceneId } from "./scenes";
+import {
+  compressionPresets,
+  matrixPresets,
+  scenes,
+  singularityPresets,
+  systemCases,
+  type Scene,
+  type SceneId,
+} from "./scenes";
 
 const defaultB: Matrix2 = [0.85, 0.65, -0.45, 1.2];
 
@@ -101,7 +112,13 @@ function SceneButton({
 }) {
   const Icon = sceneIcons[scene.id];
   return (
-    <button className={`scene-button ${active ? "active" : ""}`} onClick={onClick} type="button">
+    <button
+      className={`scene-button ${active ? "active" : ""}`}
+      onClick={onClick}
+      type="button"
+      title={`Scene ${index + 1}: ${scene.title}. ${scene.short}`}
+      aria-current={active ? "step" : undefined}
+    >
       <span className="scene-number">{index + 1}</span>
       <span className="scene-copy">
         <span>{scene.title}</span>
@@ -143,6 +160,60 @@ function Toggle({
       <span>{label}</span>
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} />
     </label>
+  );
+}
+
+function LearningStrip({
+  scene,
+  index,
+  det,
+  cond,
+  currentRank,
+}: {
+  scene: Scene;
+  index: number;
+  det: number;
+  cond: number;
+  currentRank: number;
+}) {
+  const status =
+    Math.abs(det) < 0.08 ? "dimension collapsing" : det < 0 ? "orientation flipped" : "area survives";
+  return (
+    <section className={`learning-strip ${matrixClass(det)}`}>
+      <div className="lesson-heading">
+        <span className="lesson-kicker">Scene {index + 1}</span>
+        <h2>{scene.title}</h2>
+        <p>{scene.short}</p>
+      </div>
+      <div className="lesson-body">
+        <article className="lesson-point">
+          <BookOpen size={17} />
+          <div>
+            <strong>Big idea</strong>
+            <span>{scene.question}</span>
+          </div>
+        </article>
+        <article className="lesson-point">
+          <Eye size={17} />
+          <div>
+            <strong>Watch</strong>
+            <span>{scene.watch}</span>
+          </div>
+        </article>
+        <article className="lesson-point">
+          <MousePointer2 size={17} />
+          <div>
+            <strong>Meaning</strong>
+            <span>{scene.takeaway}</span>
+          </div>
+        </article>
+      </div>
+      <div className="lesson-metrics" aria-label="Current determinant state">
+        <span>{status}</span>
+        <strong>det(A) {formatNumber(det, 4)}</strong>
+        <small>rank {currentRank} · κ {formatNumber(cond, 2)}</small>
+      </div>
+    </section>
   );
 }
 
@@ -207,6 +278,29 @@ function SceneControls({
   onRhs: (rhs: [number, number]) => void;
   onBMatrix: (matrix: Matrix2) => void;
 }) {
+  if (activeScene.id === "singularity") {
+    return (
+      <section className="panel-section">
+        <div className="section-title">
+          <span>Collapse Path</span>
+          <AlertTriangle size={16} />
+        </div>
+        <div className="preset-grid">
+          {singularityPresets.map((preset) => (
+            <button key={preset.label} type="button" onClick={() => onMatrix(preset.matrix)}>
+              <strong>{preset.label}</strong>
+              <span>{preset.detail}</span>
+            </button>
+          ))}
+        </div>
+        <p className="insight-line">
+          The important moment is not only det(A) = 0. It is the approach: area vanishes before reversibility fails
+          completely.
+        </p>
+      </section>
+    );
+  }
+
   if (activeScene.id === "systems") {
     return (
       <section className="panel-section">
@@ -225,6 +319,7 @@ function SceneControls({
               }}
             >
               <strong>{systemCase.label}</strong>
+              <em>{systemCase.badge}</em>
               <span>{systemCase.note}</span>
             </button>
           ))}
@@ -292,7 +387,8 @@ function SceneControls({
         <div className="preset-grid">
           {compressionPresets.map((preset) => (
             <button key={preset.label} type="button" onClick={() => onMatrix(preset.matrix)}>
-              {preset.label}
+              <strong>{preset.label}</strong>
+              <span>{preset.detail}</span>
             </button>
           ))}
         </div>
@@ -351,12 +447,7 @@ function InsightPanel({ scene, matrix }: { scene: Scene; matrix: Matrix2 }) {
       </section>
     );
   }
-  return (
-    <section className="quote-panel compact-quote">
-      <strong>{scene.title}</strong>
-      <span>{scene.short}</span>
-    </section>
-  );
+  return null;
 }
 
 function PlaybackBar({
@@ -483,7 +574,8 @@ export default function App() {
           </div>
         </nav>
 
-        <main className="stage">
+        <main className={`stage scene-${activeScene.id}`}>
+          <LearningStrip scene={activeScene} index={activeIndex} det={det} cond={cond} currentRank={currentRank} />
           <div className="canvas-frame">
             <MatrixCanvas
               matrix={matrix}
@@ -498,10 +590,6 @@ export default function App() {
               opacity={opacity}
               playing={playing}
             />
-            <div className="scene-chip">
-              <span>{activeIndex + 1}</span>
-              <strong>{activeScene.title}</strong>
-            </div>
           </div>
           <PlaybackBar
             activeIndex={activeIndex}
@@ -513,6 +601,8 @@ export default function App() {
         </main>
 
         <aside className="inspector" ref={inspectorRef}>
+          <InsightPanel scene={activeScene} matrix={matrix} />
+
           <MatrixEditor title="Matrix A" matrix={matrix} onChange={setMatrix} />
 
           <section className="panel-section">
@@ -539,11 +629,11 @@ export default function App() {
             </div>
           </section>
 
-          <section className="panel-section">
-            <div className="section-title">
+          <details className="panel-section details-section">
+            <summary className="section-title">
               <span>Visual Layers</span>
               <Gauge size={16} />
-            </div>
+            </summary>
             <Toggle label="Vector field" checked={vectorField} onChange={setVectorField} />
             <Toggle label="Grid" checked={showGrid} onChange={setShowGrid} />
             <Toggle label="Unit square" checked={showUnitSquare} onChange={setShowUnitSquare} />
@@ -560,7 +650,7 @@ export default function App() {
               />
               <strong>{Math.round(opacity * 100)}%</strong>
             </label>
-          </section>
+          </details>
 
           <SceneControls
             activeScene={activeScene}
@@ -571,8 +661,6 @@ export default function App() {
             onRhs={setRhs}
             onBMatrix={setBMatrix}
           />
-
-          <InsightPanel scene={activeScene} matrix={matrix} />
         </aside>
       </div>
     </div>
