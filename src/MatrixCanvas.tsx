@@ -603,7 +603,7 @@ function linePoints(a: number, b: number, c: number, limit = 4): [Vec2, Vec2] | 
     ];
   }
   return [
-    [c / a, -limit],
+    [(c - b * -limit) / a, -limit],
     [(c - b * limit) / a, limit],
   ];
 }
@@ -639,6 +639,54 @@ function drawEquationLine(
   ctx.restore();
 }
 
+function drawSolutionTrace(
+  ctx: CanvasRenderingContext2D,
+  view: View,
+  solution: Vec2,
+  direction: Vec2,
+  color: string,
+) {
+  const length = Math.hypot(direction[0], direction[1]);
+  if (length < 1e-8) return;
+  const unit: Vec2 = [direction[0] / length, direction[1] / length];
+  const span = 0.42;
+  const a: Vec2 = [solution[0] - unit[0] * span, solution[1] - unit[1] * span];
+  const b: Vec2 = [solution[0] + unit[0] * span, solution[1] + unit[1] * span];
+  const p1 = worldToScreen(view, a);
+  const p2 = worldToScreen(view, b);
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.shadowBlur = 16;
+  ctx.shadowColor = color;
+  ctx.lineCap = "round";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(p1[0], p1[1]);
+  ctx.lineTo(p2[0], p2[1]);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawSolutionMarker(ctx: CanvasRenderingContext2D, p: Vec2) {
+  ctx.save();
+  ctx.shadowBlur = 18;
+  ctx.shadowColor = GREEN;
+  ctx.fillStyle = GREEN;
+  ctx.strokeStyle = "rgba(245, 255, 245, 0.94)";
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(p[0], p[1], 8, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = GREEN;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(p[0], p[1], 14, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawLinearSystems(ctx: CanvasRenderingContext2D, view: View, m: Matrix2, rhs: [number, number]) {
   drawGrid(ctx, view, 4, true);
   const [a, b, c, d] = m;
@@ -671,14 +719,9 @@ function drawLinearSystems(ctx: CanvasRenderingContext2D, view: View, m: Matrix2
   if (Math.abs(det) > 1e-5) {
     const solution: Vec2 = [(e * d - b * f) / det, (a * f - e * c) / det];
     const p = worldToScreen(view, solution);
-    ctx.save();
-    ctx.fillStyle = GREEN;
-    ctx.shadowBlur = 18;
-    ctx.shadowColor = GREEN;
-    ctx.beginPath();
-    ctx.arc(p[0], p[1], 7, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    drawSolutionTrace(ctx, view, solution, [b, -a], CYAN);
+    drawSolutionTrace(ctx, view, solution, [d, -c], AMBER);
+    drawSolutionMarker(ctx, p);
     drawText(ctx, `Unique solution: (${formatNumber(solution[0], 2)}, ${formatNumber(solution[1], 2)})`, panelX + 22, panelY + 100, {
       color: GREEN,
       size: 13,
